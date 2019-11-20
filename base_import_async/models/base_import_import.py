@@ -90,11 +90,13 @@ class BaseImportImport(TransientModel):
             (translated_model_name, self.file_name)
         att_id = self._create_csv_attachment(
             import_fields, data, options, self.file_name)
+        lang = self.env.context.get('lang', 'en_US')
         delayed_job = self.with_delay(description=description)._split_file(
             model_name=self.res_model,
             translated_model_name=translated_model_name,
             att_id=att_id,
             options=options,
+            lang=lang,
             file_name=self.file_name
         )
         self._link_attachment_to_job(delayed_job, att_id)
@@ -159,7 +161,7 @@ class BaseImportImport(TransientModel):
     @job
     @related_action('_related_action_attachment')
     def _split_file(self, model_name, translated_model_name,
-                    att_id, options, file_name="file.csv"):
+                    att_id, options, lang, file_name="file.csv"):
         """ Split a CSV attachment in smaller import jobs """
         model_obj = self.env[model_name]
         fields, data = self._read_csv_attachment(att_id, options)
@@ -188,6 +190,7 @@ class BaseImportImport(TransientModel):
                 description=description, priority=priority)._import_one_chunk(
                     model_name=model_name,
                     att_id=att_id,
+                    lang=lang,
                     options=options)
             self._link_attachment_to_job(delayed_job, att_id)
             priority += 1
@@ -195,8 +198,8 @@ class BaseImportImport(TransientModel):
     @api.model
     @job
     @related_action('_related_action_attachment')
-    def _import_one_chunk(self, model_name, att_id, options):
-        model_obj = self.env[model_name]
+    def _import_one_chunk(self, model_name, att_id, lang, options):
+        model_obj = self.env[model_name].with_context(lang=lang)
         fields, data = self._read_csv_attachment(att_id, options)
         result = model_obj.load(fields, data)
         error_message = [message['message'] for message in result['messages']
